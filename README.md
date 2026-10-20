@@ -49,10 +49,8 @@ The original environments are based on the work by Hubbs et al. (2020):
         # Install base requirements (Gymnasium, Numpy, Scipy, Pandas, NetworkX, Matplotlib, Seaborn)
         pip install -r requirements.txt
 
-        # --- Choose ONE framework for SB3 (torch recommended) ---
-        pip install stable-baselines3[extra] torch torchvision torchaudio
-        # OR
-        # pip install stable-baselines3[extra] tensorflow
+        # --- Stable-Baselines3 uses PyTorch, not TensorFlow ---
+        pip install 'stable-baselines3[extra]'
 
         # --- Install Ray RLlib (if running *_sb3_rllib.py scripts) ---
         # Choose ONE framework (can match SB3 or be different, installing both is possible)
