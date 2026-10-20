@@ -34,5 +34,22 @@ class NewsvendorInventoryCapTests(unittest.TestCase):
         self.assertEqual(info["purchase_cost"], 0)
 
 
+    def test_positive_lead_time_delays_sales_until_arrival(self):
+        env = NewsvendorEnv(lead_time=1, max_inventory=3, max_order_quantity=10)
+        env.reset(seed=42)
+        env.mu = 100.0
+        env.state[4] = env.mu
+
+        _, _, _, _, first = env.step(np.array([10.0], dtype=np.float32))
+        self.assertGreater(first["demand"], 3)
+        self.assertEqual(first["revenue"], 0)
+        self.assertAlmostEqual(first["purchase_cost"], 3 * env.cost)
+
+        _, _, _, _, second = env.step(np.array([0.0], dtype=np.float32))
+        self.assertGreater(second["demand"], 3)
+        self.assertAlmostEqual(second["revenue"], 3 * env.price)
+        self.assertEqual(second["purchase_cost"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
