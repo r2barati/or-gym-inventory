@@ -296,8 +296,9 @@ class InvManagementMasterEnv(gym.Env):
 
         self.S[t, :] = S_current
 
-        # Update inventory for stages 1 to m-1 after fulfilling orders
-        I_current[1:] -= R_fulfill[1:] # Inventory used to supply stages 1 to m-2
+        # Each internal supplier (stages 1..m-2) ships to the stage immediately below it.
+        # R_fulfill[i] is shipped by stage i+1, so debit R_fulfill[:-1].
+        I_current[1:] -= R_fulfill[:-1]
 
         # Calculate unfulfilled orders (U)
         U_current[0] = demand_to_fill - sales_stage0
