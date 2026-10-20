@@ -131,16 +131,13 @@ class NewsvendorEnv(gym.Env):
         order_qty_raw = action.item() if isinstance(action, np.ndarray) and action.size == 1 else action
         order_qty = np.clip(order_qty_raw, 0, self.max_order_quantity) # Ensure non-negative and below max order
 
-        # Cap total inventory (on hand + in pipeline + new order)
+        # Cap the order before a zero-lead-time delivery can be sold.
         current_pipeline_inventory = self.state[5:].sum()
+        order_qty = max(0, min(order_qty, self.max_inventory - current_pipeline_inventory))
         if self.lead_time > 0:
             inv_on_hand = self.state[5] # Inventory arriving this period
-        else: # No lead time means order_qty is available instantly
+        else: # No lead time means the capped order is available instantly
             inv_on_hand = order_qty
-            # Warning: if lead_time=0, the pipeline logic below might need adjustment.
-            # Original code handled this, let's refine it slightly.
-
-        order_qty = max(0, min(order_qty, self.max_inventory - current_pipeline_inventory)) # Cap based on total inventory limit
 
         # --- Dynamics ---
         demand = self.np_random.poisson(self.mu) # Use seeded RNG
