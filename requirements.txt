@@ -1,2 +1,9 @@
-gymnasium>=0.26.0 # Or a specific recent version
+# Core environment and benchmark dependencies.
+# Install Stable-Baselines3 and Ray RLlib separately if needed (see README).
+gymnasium>=0.26.0
 numpy
+scipy
+networkx
+pandas
+matplotlib
+seaborn
