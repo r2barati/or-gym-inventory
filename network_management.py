@@ -80,8 +80,8 @@ class NetInvMgmtMasterEnv(gym.Env):
 
         # --- Apply custom configuration AFTER graph is set ---
         # Need to handle env_config slightly differently now backlog is set above
-        _env_config = env_config if env_config else {}
-        _env_config['backlog'] = self.backlog # Ensure backlog from init arg overrides config if necessary
+        _env_config = dict(env_config) if env_config else {}
+        _env_config['backlog'] = self.backlog # Constructor's backlog choice overrides config
         assign_env_config(self, _env_config) # Apply overrides from dict
 
         # --- Post-Graph Setup and Validation ---
@@ -747,18 +747,16 @@ class NetInvMgmtMasterEnv(gym.Env):
 class NetInvMgmtBacklogEnv(NetInvMgmtMasterEnv):
     """ Network inventory management environment with backlogging enabled. """
     def __init__(self, *args, **kwargs):
-        # Ensure backlog=True is set correctly, handling potential env_config
-        env_config = kwargs.pop('env_config', {})
-        env_config['backlog'] = True
-        super().__init__(*args, env_config=env_config, **kwargs) # Pass other args/kwargs
+        # Force the requested inventory policy at construction time.
+        kwargs['backlog'] = True
+        super().__init__(*args, **kwargs)
 
 class NetInvMgmtLostSalesEnv(NetInvMgmtMasterEnv):
     """ Network inventory management environment with lost sales. """
     def __init__(self, *args, **kwargs):
-        # Ensure backlog=False is set correctly
-        env_config = kwargs.pop('env_config', {})
-        env_config['backlog'] = False
-        super().__init__(*args, env_config=env_config, **kwargs) # Pass other args/kwargs
+        # Preserve lost-sales semantics, regardless of supplied kwargs/config.
+        kwargs['backlog'] = False
+        super().__init__(*args, **kwargs)
 
         # Adjust observation space lower bound: Backlog component should be non-negative
         obs_low_ls = self.observation_space.low.copy()
