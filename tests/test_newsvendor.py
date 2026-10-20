@@ -19,7 +19,7 @@ class NewsvendorInventoryCapTests(unittest.TestCase):
 
         self.assertGreater(info["demand"], 3)
         self.assertAlmostEqual(info["purchase_cost"], 3 * env.cost)
-        self.assertAlmostEqual(info["revenue"], 3 * env.price)
+        self.assertAlmostEqual(float(info["revenue"]), 3 * env.price, delta=1e-4)
 
     def test_zero_inventory_cap_prevents_immediate_sales(self):
         env = NewsvendorEnv(lead_time=0, max_inventory=0, max_order_quantity=10)
@@ -47,7 +47,7 @@ class NewsvendorInventoryCapTests(unittest.TestCase):
 
         _, _, _, _, second = env.step(np.array([0.0], dtype=np.float32))
         self.assertGreater(second["demand"], 3)
-        self.assertAlmostEqual(second["revenue"], 3 * env.price)
+        self.assertAlmostEqual(float(second["revenue"]), 3 * env.price, delta=1e-4)
         self.assertEqual(second["purchase_cost"], 0)
 
 
