@@ -88,5 +88,48 @@ class NetworkInventoryPolicyTests(unittest.TestCase):
         self.assertEqual(env.X.loc[1, 5], 347)
 
 
+    def test_lost_sales_incur_penalty_without_backlog(self):
+        def run(penalty):
+            env = NetInvMgmtLostSalesEnv(num_periods=2)
+            env.reset(seed=42)
+            env.graph.edges[(1, 0)]["_sample_demand"] = lambda: 200
+            env.graph.edges[(1, 0)]["b"] = penalty
+            action = np.zeros(env.action_space.shape, dtype=np.float32)
+            first_reward = env.step(action)[1]
+            first_backlog = env.U.loc[1, (1, 0)]
+            second_reward = env.step(action)[1]
+            second_backlog = env.U.loc[2, (1, 0)]
+            return first_reward, second_reward, first_backlog, second_backlog
+
+        without_penalty = run(0.0)
+        with_penalty = run(0.5)
+
+        self.assertEqual(with_penalty[2:], (0, 0))
+        # Period 0: 200 demand - 100 stock = 100 units lost.
+        self.assertAlmostEqual(without_penalty[0] - with_penalty[0], 50.0)
+        # Period 1: zero stock, so all 200 units are lost (not backlogged).
+        self.assertAlmostEqual(without_penalty[1] - with_penalty[1], 100.0)
+
+    def test_backlog_penalty_remains_based_on_unfilled_demand(self):
+        def run(penalty):
+            env = NetInvMgmtBacklogEnv(num_periods=2)
+            env.reset(seed=42)
+            env.graph.edges[(1, 0)]["_sample_demand"] = lambda: 200
+            env.graph.edges[(1, 0)]["b"] = penalty
+            action = np.zeros(env.action_space.shape, dtype=np.float32)
+            first_reward = env.step(action)[1]
+            first_backlog = env.U.loc[1, (1, 0)]
+            second_reward = env.step(action)[1]
+            second_backlog = env.U.loc[2, (1, 0)]
+            return first_reward, second_reward, first_backlog, second_backlog
+
+        without_penalty = run(0.0)
+        with_penalty = run(0.5)
+
+        self.assertEqual(with_penalty[2:], (100, 300))
+        self.assertAlmostEqual(without_penalty[0] - with_penalty[0], 50.0)
+        self.assertAlmostEqual(without_penalty[1] - with_penalty[1], 150.0)
+
+
 if __name__ == "__main__":
     unittest.main()

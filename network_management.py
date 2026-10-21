@@ -532,6 +532,9 @@ class NetInvMgmtMasterEnv(gym.Env):
         # --- 2 & 3) Market Demand & Fulfillment ---
         # Use inventory available *after* arrivals but *before* market sales (X[t+1] currently holds this)
         X_before_market_sales = self.X.loc[t + 1].copy() if t + 1 <= self.num_periods else self.X.loc[t].copy() # Use copy
+        # Track unfilled units this period independently of carried-over backlog.
+        # Lost sales do not persist into U[t+1], but still incur their penalty.
+        unfulfilled_this_period = {}
 
         for edge in self.retail_links:
             retailer, market = edge
@@ -555,6 +558,7 @@ class NetInvMgmtMasterEnv(gym.Env):
 
             # --- 4) Calculate Unfulfilled Demand / Backlog ---
             unfulfilled = demand_to_fill - sales_to_market
+            unfulfilled_this_period[edge] = unfulfilled
              # Ensure index t+1 is valid for U dataframe (index 0 to T)
             if t + 1 <= self.num_periods:
                 if self.backlog:
@@ -600,12 +604,10 @@ class NetInvMgmtMasterEnv(gym.Env):
                     # Cost applied per unit of *input* consumed. Input = total_sold / yield
                     OC = self.graph.nodes[node]['o'] * (total_sold_by_node / node_yield) if node_yield > 0 else 0
 
-                # Unfulfilled Penalty (for retailers, based on unfulfilled demand U calculated for *this period*)
+                # Penalize unmet demand in both modes, even when lost sales are not backlogged.
                 UP = 0
                 if node in self.retail:
-                     # U[t+1] holds the unfulfilled amount *from period t*
-                     # Penalty applies to the unfulfilled amount in the current period t
-                     UP = sum(self.graph.edges[node, k]['b'] * self.U.loc[t + 1, (node, k)]
+                     UP = sum(self.graph.edges[node, k]['b'] * unfulfilled_this_period[(node, k)]
                               for k in self.graph.successors(node) if (node, k) in self.retail_links)
 
                 node_profit = SR - PC - OC - HC - UP
