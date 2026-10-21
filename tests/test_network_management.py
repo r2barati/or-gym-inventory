@@ -165,5 +165,55 @@ class NetworkInventoryPolicyTests(unittest.TestCase):
             NetInvMgmtBacklogEnv(num_periods=2, user_D={(1, 0): [0]})
 
 
+    def test_network_raw_material_orders_respect_action_bounds(self):
+        for env_type in (NetInvMgmtBacklogEnv, NetInvMgmtLostSalesEnv):
+            with self.subTest(env_type=env_type.__name__):
+                env = env_type(num_periods=1)
+                env.reset(seed=42)
+                action = np.zeros(env.action_space.shape, dtype=np.float32)
+                idx = env.reorder_links.index((7, 4))
+                action[idx] = 1_000_000.0
+                expected = float(round(env.action_space.high[idx]))
+                observation, _, _, truncated, _ = env.step(action)
+
+                self.assertTrue(truncated)
+                self.assertEqual(env.R.loc[0, (7, 4)], expected)
+                self.assertEqual(env.S.loc[0, (7, 4)], expected)
+                self.assertEqual(env.X.loc[1, 4], 400 + expected)
+                self.assertTrue(env.observation_space.contains(observation))
+
+    def test_network_action_vector_rejects_incorrect_shape(self):
+        for env_type in (NetInvMgmtBacklogEnv, NetInvMgmtLostSalesEnv):
+            for extra in (-1, 1):
+                with self.subTest(env_type=env_type.__name__, extra=extra):
+                    env = env_type(num_periods=1)
+                    env.reset(seed=42)
+                    bad_action = np.zeros(len(env.reorder_links) + extra)
+                    with self.assertRaisesRegex(ValueError, "Expected action shape"):
+                        env.step(bad_action)
+                    self.assertEqual(env.period, 0)
+                    self.assertEqual(env.R.to_numpy().sum(), 0)
+
+    def test_network_nonfinite_orders_rejected_before_state_changes(self):
+        for value in (np.nan, np.inf, -np.inf):
+            with self.subTest(value=value):
+                env = NetInvMgmtBacklogEnv(num_periods=1)
+                env.reset(seed=42)
+                action = np.zeros(env.action_space.shape, dtype=np.float64)
+                action[0] = value
+                with self.assertRaisesRegex(ValueError, "must be finite"):
+                    env.step(action)
+                self.assertEqual(env.period, 0)
+                self.assertEqual(env.R.to_numpy().sum(), 0)
+
+    def test_negative_raw_material_orders_are_clipped_to_zero(self):
+        env = NetInvMgmtLostSalesEnv(num_periods=1)
+        env.reset(seed=42)
+        action = np.zeros(env.action_space.shape, dtype=np.float32)
+        action[env.reorder_links.index((7, 4))] = -10
+        env.step(action)
+        self.assertEqual(env.R.loc[0, (7, 4)], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

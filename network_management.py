@@ -293,7 +293,11 @@ class NetInvMgmtMasterEnv(gym.Env):
 
         # Observation Space: Concatenation of demands, inventories, pipeline
         # Use float32 for observations
-        obs_high_heuristic = self.order_cap_heuristic * self.num_periods * 2 # Large positive bound
+        # Any node can receive multiple legal raw-material orders each period.
+        # Bound inventory using the total admissible per-period inflow, not only
+        # a per-node heuristic that can be smaller than one valid delivery.
+        max_period_inflow = float(np.sum(self.action_space.high, dtype=np.float64))
+        obs_high_heuristic = self.init_inv_max + self.num_periods * max_period_inflow
         obs_low_heuristic = 0.0 if not self.backlog else -obs_high_heuristic # Allow negative if backlogged
 
         obs_low = np.full(self.obs_dim, obs_low_heuristic, dtype=np.float32)
@@ -449,8 +453,19 @@ class NetInvMgmtMasterEnv(gym.Env):
         t = self.period
 
         # --- 0) Place Orders ---
-        # Convert action array to dictionary keyed by reorder links
-        action_dict = {link: action[i] for i, link in enumerate(self.reorder_links)}
+        # Enforce the declared action-space limits on every edge, including raw
+        # material links, before changing any simulation state.
+        action = np.asarray(action, dtype=np.float64)
+        if action.shape != self.action_space.shape:
+            raise ValueError(
+                f"Expected action shape {self.action_space.shape}, got {action.shape}"
+            )
+        if not np.all(np.isfinite(action)):
+            raise ValueError("Action quantities must be finite")
+        bounded_action = np.clip(action, self.action_space.low, self.action_space.high)
+        action_dict = {
+            link: bounded_action[i] for i, link in enumerate(self.reorder_links)
+        }
 
         # Process orders based on supplier type and constraints
         # Keep track of inventory used for production/sales from each node
