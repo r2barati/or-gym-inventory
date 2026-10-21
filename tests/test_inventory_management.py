@@ -60,5 +60,53 @@ class InventoryShipmentTests(unittest.TestCase):
                 self.assertEqual(info["unfulfilled"][1], 2)
 
 
+    def test_observation_history_is_newest_first_from_episode_start(self):
+        for env_type in (InvManagementBacklogEnv, InvManagementLostSalesEnv):
+            with self.subTest(env_type=env_type.__name__):
+                env = env_type(env_config={
+                    "periods": 4, "I0": [0, 20],
+                    "r": [1.0, 1.0, 1.0], "k": [0.0] * 3,
+                    "h": [0.0, 0.0], "c": [50, 50],
+                    "L": [3, 3], "dist": 5, "user_D": [0] * 4,
+                })
+                initial, _ = env.reset(seed=42)
+                np.testing.assert_array_equal(initial[2:], [0] * 6)
+                for action, expected in [
+                    ([1, 0], [1, 0, 0, 0, 0, 0]),
+                    ([2, 0], [2, 0, 1, 0, 0, 0]),
+                    ([3, 0], [3, 0, 2, 0, 1, 0]),
+                    ([4, 0], [4, 0, 3, 0, 2, 0]),
+                ]:
+                    obs, _, _, _, _ = env.step(np.array(action, dtype=np.int64))
+                    np.testing.assert_array_equal(obs[2:], expected)
+                    self.assertTrue(env.observation_space.contains(obs))
+
+    def test_observation_history_preserves_stage_order(self):
+        env = InvManagementLostSalesEnv(env_config={
+            "periods": 2, "I0": [0, 20, 30],
+            "r": [1.0] * 4, "k": [0.0] * 4,
+            "h": [0.0] * 3, "c": [50] * 3,
+            "L": [2, 1, 2], "dist": 5, "user_D": [0, 0],
+        })
+        env.reset(seed=42)
+        first_obs, _, _, _, _ = env.step(np.array([1, 2, 3], dtype=np.int64))
+        np.testing.assert_array_equal(first_obs[3:], [1, 2, 3, 0, 0, 0])
+        second_obs, _, _, _, _ = env.step(np.array([4, 5, 6], dtype=np.int64))
+        np.testing.assert_array_equal(second_obs[3:], [4, 5, 6, 1, 2, 3])
+
+    def test_zero_lead_time_has_no_action_history_slots(self):
+        env = InvManagementBacklogEnv(env_config={
+            "periods": 2, "I0": [0, 20],
+            "r": [1.0] * 3, "k": [0.0] * 3,
+            "h": [0.0] * 2, "c": [50] * 2,
+            "L": [0, 0], "dist": 5, "user_D": [0, 0],
+        })
+        initial, _ = env.reset(seed=42)
+        self.assertEqual(initial.shape, (2,))
+        new_obs, _, _, _, _ = env.step(np.array([1, 0], dtype=np.int64))
+        self.assertEqual(new_obs.shape, (2,))
+        self.assertTrue(env.observation_space.contains(new_obs))
+
+
 if __name__ == "__main__":
     unittest.main()
