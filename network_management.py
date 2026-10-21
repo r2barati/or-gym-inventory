@@ -444,6 +444,8 @@ class NetInvMgmtMasterEnv(gym.Env):
         # Process orders based on supplier type and constraints
         # Keep track of inventory used for production/sales from each node
         inventory_consumed = pd.Series(0.0, index=self.main_nodes)
+        # Factory capacity is a per-period limit shared across all outgoing links.
+        factory_output_committed = pd.Series(0.0, index=self.factory)
 
         for edge, request_raw in action_dict.items():
             request = max(0, round(request_raw)) # Ensure non-negative integer request
@@ -467,12 +469,8 @@ class NetInvMgmtMasterEnv(gym.Env):
                     yield_supplier = self.graph.nodes[supplier]['v']
                     # Calculate max producible based on *remaining* inventory (after fulfilling previous orders)
                     max_producible_inv = yield_supplier * order_available_inv
-                    # Production also limited by overall capacity (assume capacity is per period, not per order)
-                    # This part is tricky - should capacity be shared? Assume yes for now.
-                    # Let's check total production so far for this node if needed, or simplify:
-                    # Assume capacity constraint applies to *each* order request individually? Or total?
-                    # Original code checks min(request, C, v*X_supplier) per order. Let's stick to that for now.
-                    max_producible_cap = cap_supplier
+                    # All outgoing orders compete for the same factory capacity.
+                    max_producible_cap = max(0, cap_supplier - factory_output_committed[supplier])
                     max_producible = min(max_producible_cap, max_producible_inv)
 
                     order_available = min(order_available, max_producible) # Limited by production capability
@@ -483,6 +481,8 @@ class NetInvMgmtMasterEnv(gym.Env):
                 # Update inventory consumed *for this supplier*
                 node_yield = self.graph.nodes[supplier].get('v', 1.0) # Yield is 1 for distributors
                 inventory_consumed[supplier] += order_fulfilled / node_yield
+                if supplier in self.factory:
+                    factory_output_committed[supplier] += order_fulfilled
 
             # Store the *fulfilled* order amount in R
             self.R.loc[t, edge] = order_fulfilled
