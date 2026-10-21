@@ -449,8 +449,19 @@ class NetInvMgmtMasterEnv(gym.Env):
         t = self.period
 
         # --- 0) Place Orders ---
-        # Convert action array to dictionary keyed by reorder links
-        action_dict = {link: action[i] for i, link in enumerate(self.reorder_links)}
+        # Enforce the declared action-space limits on every edge, including raw
+        # material links, before changing any simulation state.
+        action = np.asarray(action, dtype=np.float64)
+        if action.shape != self.action_space.shape:
+            raise ValueError(
+                f"Expected action shape {self.action_space.shape}, got {action.shape}"
+            )
+        if not np.all(np.isfinite(action)):
+            raise ValueError("Action quantities must be finite")
+        bounded_action = np.clip(action, self.action_space.low, self.action_space.high)
+        action_dict = {
+            link: bounded_action[i] for i, link in enumerate(self.reorder_links)
+        }
 
         # Process orders based on supplier type and constraints
         # Keep track of inventory used for production/sales from each node
