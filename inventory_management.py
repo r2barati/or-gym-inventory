@@ -435,15 +435,21 @@ class InvManagementMasterEnv(gym.Env):
 class InvManagementBacklogEnv(InvManagementMasterEnv):
     """ Inventory management environment with backlogging enabled (default). """
     def __init__(self, *args, **kwargs):
-        # Ensure backlog is True if user tries to override via kwargs
+        # The backlog variant must remain a backlog environment even when
+        # callers supply conflicting env_config settings.
         kwargs['backlog'] = True
+        if kwargs.get('env_config') is not None:
+            kwargs['env_config'] = {**kwargs['env_config'], 'backlog': True}
         super().__init__(*args, **kwargs)
 
 class InvManagementLostSalesEnv(InvManagementMasterEnv):
     """ Inventory management environment with lost sales (backlog=False). """
     def __init__(self, *args, **kwargs):
-        # Force backlog to False
+        # Force lost-sales semantics before the parent builds its spaces and
+        # dynamics; copy config to avoid mutating the caller's dictionary.
         kwargs['backlog'] = False
+        if kwargs.get('env_config') is not None:
+            kwargs['env_config'] = {**kwargs['env_config'], 'backlog': False}
         super().__init__(*args, **kwargs)
         # Observation space lower bound is 0 for lost sales env
         m_minus_1 = self.num_stages - 1
