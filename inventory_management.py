@@ -377,10 +377,9 @@ class InvManagementMasterEnv(gym.Env):
         if t > 0:
             # Determine how many past periods of actions to include (up to lt_max)
             num_past_periods = min(t, lt_max)
-            # Get the relevant action history [t-num_past_periods, ..., t-1]
-            past_actions = self.action_log[t - num_past_periods : t, :]
-            # Flatten and place into the state array
-            # State index starts from m_minus_1 for the pipeline part
+            # Most recent action first, matching the documented observation layout.
+            # Pad the oldest (not yet observed) history slots with zeros.
+            past_actions = self.action_log[t - num_past_periods : t, :][::-1]
             state[m_minus_1 : m_minus_1 + past_actions.size] = past_actions.flatten()
 
         # Add backlog to the state? Original code included it in inventory position.
