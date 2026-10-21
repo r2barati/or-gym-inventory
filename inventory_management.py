@@ -118,7 +118,13 @@ class InvManagementMasterEnv(gym.Env):
         # Shape: (m-1) * (lt_max + 1)
         self.pipeline_length = (m - 1) * (self.lt_max + 1)
         # Define reasonable bounds - these might need tuning based on typical values
-        inv_capacity_sum = self.supply_capacity.sum() * self.num_periods * 2 # Heuristic upper bound
+        # An initial stock can exceed the total ordering capacity (notably in
+        # short episodes). Bound each on-hand inventory by its initial maximum
+        # plus all admissible receipts during the episode; past actions fit too.
+        inv_capacity_sum = (
+            int(self.init_inv.max())
+            + int(self.supply_capacity.sum()) * self.num_periods
+        )
         obs_low = -np.ones(self.pipeline_length, dtype=np.int64) * inv_capacity_sum if self.backlog else np.zeros(self.pipeline_length, dtype=np.int64)
         obs_high = np.ones(self.pipeline_length, dtype=np.int64) * inv_capacity_sum
         self.observation_space = spaces.Box(
@@ -455,7 +461,13 @@ class InvManagementLostSalesEnv(InvManagementMasterEnv):
         m_minus_1 = self.num_stages - 1
         lt_max = self.lt_max
         pipeline_length = (m_minus_1) * (lt_max + 1)
-        inv_capacity_sum = self.supply_capacity.sum() * self.num_periods * 2 # Heuristic upper bound
+        # An initial stock can exceed the total ordering capacity (notably in
+        # short episodes). Bound each on-hand inventory by its initial maximum
+        # plus all admissible receipts during the episode; past actions fit too.
+        inv_capacity_sum = (
+            int(self.init_inv.max())
+            + int(self.supply_capacity.sum()) * self.num_periods
+        )
         self.observation_space = spaces.Box(
             low=np.zeros(pipeline_length, dtype=np.int64), # Lower bound is 0
             high=np.ones(pipeline_length, dtype=np.int64) * inv_capacity_sum,
