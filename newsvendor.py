@@ -124,12 +124,19 @@ class NewsvendorEnv(gym.Env):
 
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Performs one time step of the environment's dynamics."""
-        self.step_count += 1
+        # Accept the documented one-element action or a convenient scalar. Reject
+        # malformed/non-finite orders before modifying the episode state.
+        action_array = np.asarray(action, dtype=np.float64)
+        if action_array.shape not in ((), (1,)):
+            raise ValueError(
+                f"Expected a scalar or a one-element action, got shape {action_array.shape}"
+            )
+        if not np.all(np.isfinite(action_array)):
+            raise ValueError("Order quantity must be finite")
 
-        # --- Action ---
-        # Ensure action is a scalar float/int
-        order_qty_raw = action.item() if isinstance(action, np.ndarray) and action.size == 1 else action
-        order_qty = np.clip(order_qty_raw, 0, self.max_order_quantity) # Ensure non-negative and below max order
+        order_qty_raw = float(action_array.item())
+        order_qty = float(np.clip(order_qty_raw, 0, self.max_order_quantity))
+        self.step_count += 1
 
         # Cap the order before a zero-lead-time delivery can be sold.
         current_pipeline_inventory = self.state[5:].sum()
