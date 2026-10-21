@@ -131,5 +131,39 @@ class NetworkInventoryPolicyTests(unittest.TestCase):
         self.assertAlmostEqual(without_penalty[1] - with_penalty[1], 150.0)
 
 
+    def test_explicit_zero_demand_is_not_randomized(self):
+        for env_type in (NetInvMgmtBacklogEnv, NetInvMgmtLostSalesEnv):
+            with self.subTest(env_type=env_type.__name__):
+                env = env_type(num_periods=2, user_D={(1, 0): [0, 0]})
+                env.reset(seed=42)
+                no_orders = np.zeros(env.action_space.shape, dtype=np.float32)
+                env.step(no_orders)
+                env.step(no_orders)
+                self.assertEqual(env.D.loc[0, (1, 0)], 0)
+                self.assertEqual(env.D.loc[1, (1, 0)], 0)
+
+    def test_env_config_explicit_demand_including_zero(self):
+        config = {"num_periods": 2, "user_D": {(1, 0): [0, 3]}}
+        env = NetInvMgmtBacklogEnv(env_config=config)
+        env.reset(seed=42)
+        no_orders = np.zeros(env.action_space.shape, dtype=np.float32)
+        env.step(no_orders)
+        env.step(no_orders)
+        self.assertEqual(list(env.D[(1, 0)]), [0, 3])
+
+    def test_unset_demand_still_uses_sampler(self):
+        env = NetInvMgmtBacklogEnv(num_periods=2)
+        # The default graph has a placeholder all-zero user_D, not a supplied path.
+        env.graph.edges[(1, 0)]["demand_dist_func"] = lambda **kwargs: 7
+        env.reset(seed=42)
+        no_orders = np.zeros(env.action_space.shape, dtype=np.float32)
+        env.step(no_orders)
+        self.assertEqual(env.D.loc[0, (1, 0)], 7)
+
+    def test_zero_demand_path_length_must_match_horizon(self):
+        with self.assertRaisesRegex(AssertionError, "user_D length"):
+            NetInvMgmtBacklogEnv(num_periods=2, user_D={(1, 0): [0]})
+
+
 if __name__ == "__main__":
     unittest.main()

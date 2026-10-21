@@ -70,6 +70,13 @@ class NetInvMgmtMasterEnv(gym.Env):
         self.seed_int = seed_int # Keep for potential initial seeding
         self.user_D = user_D if user_D is not None else {}
         self.sample_path = sample_path if sample_path is not None else {}
+        # Track caller-supplied demand separately from fallback zero arrays.
+        # A specified all-zero sequence is a valid deterministic demand trace.
+        self._explicit_user_demand_links = set(self.user_D)
+        if graph is not None:
+            self._explicit_user_demand_links.update(
+                edge for edge in graph.edges if 'user_D' in graph.edges[edge]
+            )
 
         # --- Graph Definition ---
         # Use provided graph or create default if None
@@ -83,6 +90,8 @@ class NetInvMgmtMasterEnv(gym.Env):
         _env_config = dict(env_config) if env_config else {}
         _env_config['backlog'] = self.backlog # Constructor's backlog choice overrides config
         assign_env_config(self, _env_config) # Apply overrides from dict
+        if 'user_D' in _env_config:
+            self._explicit_user_demand_links.update(_env_config['user_D'])
 
         # --- Post-Graph Setup and Validation ---
         self._initialize_graph_dependent_attributes()
@@ -229,7 +238,8 @@ class NetInvMgmtMasterEnv(gym.Env):
                 if 'demand_dist_func' in attrs:
                     assert 'dist_param' in attrs, f"Edge {edge}: Missing 'dist_param' for 'demand_dist_func'"
                 # Check user_D length only if it's expected to be used (not sample_path=True)
-                if 'user_D' in attrs and np.sum(attrs['user_D']) > 0 and not attrs.get('sample_path', False):
+                if ('user_D' in attrs and not attrs.get('sample_path', False)
+                        and (edge in self._explicit_user_demand_links or 'demand_dist_func' not in attrs)):
                      assert len(attrs['user_D']) == self.num_periods, f"Edge {edge}: user_D length {len(attrs['user_D'])} != num_periods {self.num_periods}"
 
         # Other parameters
@@ -247,7 +257,8 @@ class NetInvMgmtMasterEnv(gym.Env):
             edge = (u, v)
             if edge in self.retail_links:
                  # If user_D is specified AND sample_path is False, use user_D directly
-                use_user_d = ('user_D' in data and np.sum(data['user_D']) > 0 and not data.get('sample_path', False))
+                use_user_d = ('user_D' in data and not data.get('sample_path', False)
+                              and (edge in self._explicit_user_demand_links or 'demand_dist_func' not in data))
 
                 if use_user_d:
                     # Demand taken directly from user_D list in step function
