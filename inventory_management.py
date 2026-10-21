@@ -243,11 +243,17 @@ class InvManagementMasterEnv(gym.Env):
         c = self.supply_capacity
 
         # --- 0) Stages place replenishment orders ---
-        # Ensure action is non-negative integers and within correct dtype/bounds
-        # Clip action based on action space bounds if necessary (though agent should respect them)
-        # R_requested = np.clip(action, self.action_space.low, self.action_space.high).astype(np.int64)
-        # Assuming agent provides valid action dtype for now:
-        R_requested = np.maximum(action, 0).astype(np.int64)
+        # Enforce the public action-space contract before recording orders.
+        action = np.asarray(action)
+        if action.shape != self.action_space.shape:
+            raise ValueError(
+                f"Expected action shape {self.action_space.shape}, got {action.shape}"
+            )
+        if not np.all(np.isfinite(action)):
+            raise ValueError("Action quantities must be finite")
+        R_requested = np.clip(
+            action, self.action_space.low, self.action_space.high
+        ).astype(np.int64)
 
         # Add previous period's backlog for replenishment orders (stages 1 to m)
         current_order_request = R_requested.copy()
