@@ -49,5 +49,44 @@ class NetworkInventoryPolicyTests(unittest.TestCase):
         self.assertEqual(second_observation[0], 300)
 
 
+    def test_factory_capacity_shared_across_outgoing_links(self):
+        for env_type in (NetInvMgmtBacklogEnv, NetInvMgmtLostSalesEnv):
+            with self.subTest(env_type=env_type.__name__):
+                env = env_type(num_periods=2)
+                # Factory 4 supplies both distributor 2 and distributor 3.
+                env.graph.nodes[4]["C"] = 5
+                env.reset(seed=42)
+
+                orders = np.zeros(env.action_space.shape, dtype=np.float32)
+                orders[env.reorder_links.index((4, 2))] = 4
+                orders[env.reorder_links.index((4, 3))] = 4
+                env.step(orders)
+
+                self.assertEqual(env.R.loc[0, (4, 2)], 4)
+                self.assertEqual(env.R.loc[0, (4, 3)], 1)
+                self.assertEqual(env.R.loc[0, (4, 2)] + env.R.loc[0, (4, 3)], 5)
+                self.assertEqual(env.X.loc[1, 4], 395)
+
+                # Capacity is available again in a fresh production period.
+                env.step(orders)
+                self.assertEqual(env.R.loc[1, (4, 2)] + env.R.loc[1, (4, 3)], 5)
+                self.assertEqual(env.X.loc[2, 4], 390)
+
+    def test_factory_capacity_is_independent_by_factory(self):
+        env = NetInvMgmtBacklogEnv(num_periods=1)
+        env.graph.nodes[4]["C"] = 5
+        env.graph.nodes[5]["C"] = 3
+        env.reset(seed=42)
+        orders = np.zeros(env.action_space.shape, dtype=np.float32)
+        for edge in ((4, 2), (4, 3), (5, 2)):
+            orders[env.reorder_links.index(edge)] = 4
+        env.step(orders)
+
+        self.assertEqual(env.R.loc[0, (4, 2)] + env.R.loc[0, (4, 3)], 5)
+        self.assertEqual(env.R.loc[0, (5, 2)], 3)
+        self.assertEqual(env.X.loc[1, 4], 395)
+        self.assertEqual(env.X.loc[1, 5], 347)
+
+
 if __name__ == "__main__":
     unittest.main()
