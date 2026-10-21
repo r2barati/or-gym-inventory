@@ -108,5 +108,43 @@ class InventoryShipmentTests(unittest.TestCase):
         self.assertTrue(env.observation_space.contains(new_obs))
 
 
+    def test_actions_are_bounded_before_backlog_and_history(self):
+        for env_type in (InvManagementBacklogEnv, InvManagementLostSalesEnv):
+            with self.subTest(env_type=env_type.__name__):
+                env = env_type(env_config={
+                    "periods": 2, "I0": [0, 20],
+                    "r": [1.0] * 3, "k": [0.0] * 3,
+                    "h": [0.0] * 2, "c": [5, 7],
+                    "L": [1, 1], "dist": 5, "user_D": [0, 0],
+                })
+                env.reset(seed=42)
+                observation, _, _, _, info = env.step(
+                    np.array([1_000_000, -3], dtype=np.int64)
+                )
+                np.testing.assert_array_equal(env.action_log[0], [5, 0])
+                np.testing.assert_array_equal(env.R[0], [5, 0])
+                self.assertEqual(info["unfulfilled"][1], 0)
+                self.assertTrue(env.observation_space.contains(observation))
+                np.testing.assert_array_equal(observation[2:], [5, 0])
+
+    def test_invalid_action_shape_does_not_advance_episode(self):
+        for env_type in (InvManagementBacklogEnv, InvManagementLostSalesEnv):
+            with self.subTest(env_type=env_type.__name__):
+                env = self.make_env(env_type, [0, 10])
+                with self.assertRaisesRegex(ValueError, "Expected action shape"):
+                    env.step(np.array([3], dtype=np.int64))
+                self.assertEqual(env.period, 0)
+                self.assertEqual(np.sum(env.R), 0)
+
+    def test_nonfinite_actions_do_not_advance_episode(self):
+        for value in (np.nan, np.inf, -np.inf):
+            with self.subTest(value=value):
+                env = self.make_env(InvManagementBacklogEnv, [0, 10])
+                with self.assertRaisesRegex(ValueError, "must be finite"):
+                    env.step(np.array([value, 0], dtype=np.float64))
+                self.assertEqual(env.period, 0)
+                self.assertEqual(np.sum(env.R), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
