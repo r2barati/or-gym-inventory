@@ -146,5 +146,57 @@ class InventoryShipmentTests(unittest.TestCase):
                 self.assertEqual(np.sum(env.R), 0)
 
 
+    def test_lost_sales_policy_cannot_be_overridden_by_env_config(self):
+        config = {
+            "periods": 2, "I0": [0, 0], "r": [1.0] * 3,
+            "k": [0.0] * 3, "h": [0.0] * 2,
+            "c": [5, 5], "L": [1, 1],
+            "dist": 5, "user_D": [4, 3], "backlog": True,
+        }
+        env = InvManagementLostSalesEnv(env_config=config, backlog=True)
+        self.assertTrue(config["backlog"])  # No mutation of caller configuration
+        self.assertFalse(env.backlog)
+        self.assertTrue(np.all(env.observation_space.low >= 0))
+        env.reset(seed=42)
+        zero_orders = np.zeros(env.action_space.shape, dtype=np.int64)
+        first_obs, _, _, _, first = env.step(zero_orders)
+        self.assertEqual(first["unfulfilled"][0], 4)
+        self.assertEqual(env.LS[0, 0], 4)
+        self.assertEqual(env.B[1, 0], 0)
+        self.assertTrue(env.observation_space.contains(first_obs))
+        second_obs, _, _, truncated, second = env.step(zero_orders)
+        self.assertTrue(truncated)
+        self.assertEqual(second["unfulfilled"][0], 3)
+        self.assertEqual(env.LS[1, 0], 3)
+        self.assertEqual(env.B[2, 0], 0)
+        self.assertTrue(env.observation_space.contains(second_obs))
+
+    def test_backlog_policy_cannot_be_overridden_by_env_config(self):
+        config = {
+            "periods": 2, "I0": [0, 0], "r": [1.0] * 3,
+            "k": [0.0] * 3, "h": [0.0] * 2,
+            "c": [5, 5], "L": [1, 1],
+            "dist": 5, "user_D": [4, 3], "backlog": False,
+        }
+        env = InvManagementBacklogEnv(env_config=config, backlog=False)
+        self.assertFalse(config["backlog"])  # No mutation of caller configuration
+        self.assertTrue(env.backlog)
+        env.reset(seed=42)
+        zero_orders = np.zeros(env.action_space.shape, dtype=np.int64)
+        _, _, _, _, first = env.step(zero_orders)
+        self.assertEqual(first["unfulfilled"][0], 4)
+        self.assertEqual(env.B[1, 0], 4)
+        self.assertEqual(env.LS[0, 0], 0)
+        _, _, _, truncated, second = env.step(zero_orders)
+        self.assertTrue(truncated)
+        self.assertEqual(second["unfulfilled"][0], 7)
+        self.assertEqual(env.B[2, 0], 7)
+        self.assertEqual(env.LS[1, 0], 0)
+
+    def test_policy_defaults_stay_intact_without_env_config(self):
+        self.assertTrue(InvManagementBacklogEnv().backlog)
+        self.assertFalse(InvManagementLostSalesEnv().backlog)
+
+
 if __name__ == "__main__":
     unittest.main()
