@@ -501,8 +501,10 @@ class NetInvMgmtMasterEnv(gym.Env):
 
                     order_available = min(order_available, max_producible) # Limited by production capability
 
-                # Fulfill the minimum of requested and available
-                order_fulfilled = min(request, order_available)
+                # Ship whole units only. Fractional factory yields can leave
+                # enough inputs for part of a unit, but must never create
+                # fractional shipments or charge fractional product revenue.
+                order_fulfilled = min(request, int(np.floor(order_available)))
 
                 # Update inventory consumed *for this supplier*
                 node_yield = self.graph.nodes[supplier].get('v', 1.0) # Yield is 1 for distributors

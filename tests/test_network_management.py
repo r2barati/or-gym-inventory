@@ -215,5 +215,49 @@ class NetworkInventoryPolicyTests(unittest.TestCase):
         self.assertEqual(env.R.loc[0, (7, 4)], 0)
 
 
+    def test_fractional_factory_yield_ships_only_whole_units(self):
+        for env_type in (NetInvMgmtBacklogEnv, NetInvMgmtLostSalesEnv):
+            with self.subTest(env_type=env_type.__name__):
+                env = env_type(num_periods=2)
+                env.graph.nodes[4]["I0"] = 5
+                env.graph.nodes[4]["v"] = 0.5
+                env.graph.nodes[4]["C"] = 50
+                env.reset(seed=42)
+
+                orders = np.zeros(env.action_space.shape, dtype=np.float32)
+                orders[env.reorder_links.index((4, 2))] = 6
+                observation, _, _, _, _ = env.step(orders)
+
+                self.assertEqual(env.R.loc[0, (4, 2)], 2)
+                self.assertEqual(env.S.loc[0, (4, 2)], 2)
+                self.assertEqual(env.Y.loc[1, (4, 2)], 2)
+                self.assertEqual(env.X.loc[1, 4], 1)
+                self.assertTrue(env.observation_space.contains(observation))
+
+    def test_shared_factory_input_inventory_is_not_overconsumed(self):
+        for env_type in (NetInvMgmtBacklogEnv, NetInvMgmtLostSalesEnv):
+            with self.subTest(env_type=env_type.__name__):
+                env = env_type(num_periods=2)
+                env.graph.nodes[4]["I0"] = 15
+                env.graph.nodes[4]["v"] = 0.5
+                env.graph.nodes[4]["C"] = 50
+                env.reset(seed=42)
+
+                orders = np.zeros(env.action_space.shape, dtype=np.float32)
+                orders[env.reorder_links.index((4, 2))] = 3
+                orders[env.reorder_links.index((4, 3))] = 10
+                env.step(orders)
+                self.assertEqual(env.R.loc[0, (4, 2)], 3)
+                self.assertEqual(env.R.loc[0, (4, 3)], 4)
+                self.assertEqual(env.X.loc[1, 4], 1)
+                self.assertGreaterEqual(env.X.loc[1, 4], 0)
+
+                # Insufficient remaining input stock to produce a whole unit.
+                env.step(orders)
+                self.assertEqual(env.R.loc[1, (4, 2)], 0)
+                self.assertEqual(env.R.loc[1, (4, 3)], 0)
+                self.assertEqual(env.X.loc[2, 4], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
