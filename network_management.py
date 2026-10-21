@@ -293,7 +293,11 @@ class NetInvMgmtMasterEnv(gym.Env):
 
         # Observation Space: Concatenation of demands, inventories, pipeline
         # Use float32 for observations
-        obs_high_heuristic = self.order_cap_heuristic * self.num_periods * 2 # Large positive bound
+        # Any node can receive multiple legal raw-material orders each period.
+        # Bound inventory using the total admissible per-period inflow, not only
+        # a per-node heuristic that can be smaller than one valid delivery.
+        max_period_inflow = float(np.sum(self.action_space.high, dtype=np.float64))
+        obs_high_heuristic = self.init_inv_max + self.num_periods * max_period_inflow
         obs_low_heuristic = 0.0 if not self.backlog else -obs_high_heuristic # Allow negative if backlogged
 
         obs_low = np.full(self.obs_dim, obs_low_heuristic, dtype=np.float32)
