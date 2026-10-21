@@ -259,5 +259,46 @@ class NetworkInventoryPolicyTests(unittest.TestCase):
                 self.assertEqual(env.X.loc[2, 4], 1)
 
 
+    def test_large_valid_demand_backlog_stays_within_observation_space(self):
+        env = NetInvMgmtBacklogEnv(
+            num_periods=2, user_D={(1, 0): [1_000_000, 2_000_000]}
+        )
+        self.assertTrue(np.isposinf(env.observation_space.high[0]))
+        # Inventory and pipeline still have finite capacity-based bounds.
+        self.assertTrue(np.all(np.isfinite(env.observation_space.high[1:])))
+
+        initial_obs, _ = env.reset(seed=42)
+        self.assertTrue(env.observation_space.contains(initial_obs))
+        no_orders = np.zeros(env.action_space.shape, dtype=np.float32)
+
+        first_obs, first_reward, _, first_truncated, _ = env.step(no_orders)
+        self.assertFalse(first_truncated)
+        self.assertTrue(np.isfinite(first_reward))
+        self.assertEqual(first_obs[0], 999_900)
+        self.assertTrue(env.observation_space.contains(first_obs))
+
+        second_obs, second_reward, _, second_truncated, _ = env.step(no_orders)
+        self.assertTrue(second_truncated)
+        self.assertTrue(np.isfinite(second_reward))
+        self.assertEqual(second_obs[0], 2_999_900)
+        self.assertTrue(env.observation_space.contains(second_obs))
+
+    def test_large_valid_demand_in_lost_sales_mode_has_zero_backlog(self):
+        env = NetInvMgmtLostSalesEnv(
+            num_periods=2, user_D={(1, 0): [1_000_000, 2_000_000]}
+        )
+        self.assertTrue(np.isfinite(env.observation_space.high[0]))
+        env.reset(seed=42)
+        no_orders = np.zeros(env.action_space.shape, dtype=np.float32)
+
+        for period in (1, 2):
+            with self.subTest(period=period):
+                obs, reward, _, _, _ = env.step(no_orders)
+                self.assertEqual(obs[0], 0)
+                self.assertEqual(env.U.loc[period, (1, 0)], 0)
+                self.assertTrue(np.isfinite(reward))
+                self.assertTrue(env.observation_space.contains(obs))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -303,8 +303,12 @@ class NetInvMgmtMasterEnv(gym.Env):
         obs_low = np.full(self.obs_dim, obs_low_heuristic, dtype=np.float32)
         obs_high = np.full(self.obs_dim, obs_high_heuristic, dtype=np.float32)
 
-        # Refine bounds for demand/backlog part (first len(retail_links) elements)
-        obs_low[0:len(self.retail_links)] = 0.0 # Demand/backlog usually non-negative
+        # Backlog is non-negative and may grow without limit under stochastic
+        # demand (or an explicit large demand trace). Do not impose an arbitrary
+        # upper bound that makes otherwise valid observations fail Gymnasium checks.
+        obs_low[:len(self.retail_links)] = 0.0
+        if self.backlog:
+            obs_high[:len(self.retail_links)] = np.inf
 
         self.observation_space = spaces.Box(
             low=obs_low,
