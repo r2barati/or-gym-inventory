@@ -198,5 +198,45 @@ class InventoryShipmentTests(unittest.TestCase):
         self.assertFalse(InvManagementLostSalesEnv().backlog)
 
 
+    def test_initial_inventory_above_order_capacity_is_in_observation_space(self):
+        # Old space high = sum(c) * periods * 2 = 40, below initial stock 120.
+        for env_type in (InvManagementBacklogEnv, InvManagementLostSalesEnv):
+            with self.subTest(env_type=env_type.__name__):
+                env = env_type(env_config={
+                    "periods": 2, "I0": [0, 120],
+                    "r": [1.0] * 3, "k": [0.0] * 3,
+                    "h": [0.0] * 2, "c": [5, 5], "L": [1, 1],
+                    "dist": 5, "user_D": [0, 0],
+                })
+                initial, _ = env.reset(seed=42)
+                self.assertEqual(initial[1], 120)
+                self.assertTrue(env.observation_space.contains(initial))
+                self.assertGreaterEqual(env.observation_space.high[1], 120)
+                no_orders = np.zeros(env.action_space.shape, dtype=np.int64)
+                for expected_period in (1, 2):
+                    observation, reward, _, truncated, _ = env.step(no_orders)
+                    self.assertTrue(np.isfinite(reward))
+                    self.assertTrue(env.observation_space.contains(observation))
+                    self.assertEqual(truncated, expected_period == 2)
+
+    def test_initial_inventory_and_replenishment_both_fit_bounds(self):
+        for env_type in (InvManagementBacklogEnv, InvManagementLostSalesEnv):
+            with self.subTest(env_type=env_type.__name__):
+                env = env_type(env_config={
+                    "periods": 3, "I0": [100, 120],
+                    "r": [1.0] * 3, "k": [0.0] * 3,
+                    "h": [0.0] * 2, "c": [5, 7], "L": [1, 1],
+                    "dist": 5, "user_D": [0, 0, 0],
+                })
+                observation, _ = env.reset(seed=42)
+                self.assertTrue(env.observation_space.contains(observation))
+                for _ in range(3):
+                    observation, _, _, _, _ = env.step(
+                        np.array([5, 7], dtype=np.int64)
+                    )
+                    self.assertTrue(env.observation_space.contains(observation))
+                self.assertLessEqual(np.max(observation), np.max(env.observation_space.high))
+
+
 if __name__ == "__main__":
     unittest.main()
